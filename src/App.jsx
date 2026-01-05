@@ -19,8 +19,9 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
-  // --- Force Load Tailwind CSS ---
+  // --- Force Load Tailwind CSS & Set Global Styles ---
   useEffect(() => {
+    // 1. Load Tailwind
     const scriptId = 'tailwind-cdn';
     if (!document.getElementById(scriptId)) {
       const script = document.createElement('script');
@@ -28,6 +29,19 @@ export default function App() {
       script.src = "https://cdn.tailwindcss.com";
       document.head.appendChild(script);
     }
+
+    // 2. Force Body Background & Height (Fixes "not full screen" issues)
+    // This ensures the background color covers the entire viewport, even outside the React root
+    document.body.style.backgroundColor = '#0f172a'; // slate-900
+    document.body.style.margin = '0';
+    document.body.style.minHeight = '100vh';
+    
+    // Cleanup defaults on unmount
+    return () => {
+      document.body.style.backgroundColor = '';
+      document.body.style.margin = '';
+      document.body.style.minHeight = '';
+    };
   }, []);
 
   // Load data from local storage on mount
@@ -126,8 +140,9 @@ export default function App() {
   const isGoalReached = elapsed >= goalMs;
 
   return (
-    // UPDATED: min-h-[100dvh] handles mobile address bars, flex flex-col allows filling vertical space
-    <div className="min-h-[100dvh] bg-slate-900 text-slate-100 font-sans selection:bg-blue-500 selection:text-white flex flex-col">
+    // UPDATED: Changed min-h-[100dvh] to min-h-screen for better compatibility
+    // The useEffect above handles the body background color to prevent gaps
+    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500 selection:text-white flex flex-col">
       
       {/* Header */}
       <header className="p-6 flex justify-between items-center bg-slate-800/50 backdrop-blur-md sticky top-0 z-10 border-b border-slate-700/50 shrink-0">
@@ -154,7 +169,6 @@ export default function App() {
       </header>
 
       {/* Main Content */}
-      {/* UPDATED: flex-1 fills remaining height, justify-center centers timer vertically */}
       <main className="flex-1 w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center gap-8">
         
         {/* Mode Selector */}
