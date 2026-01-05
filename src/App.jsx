@@ -19,31 +19,6 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   
-  // --- Force Load Tailwind CSS & Set Global Styles ---
-  useEffect(() => {
-    // 1. Load Tailwind
-    const scriptId = 'tailwind-cdn';
-    if (!document.getElementById(scriptId)) {
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = "https://cdn.tailwindcss.com";
-      document.head.appendChild(script);
-    }
-
-    // 2. Force Body Background & Height (Fixes "not full screen" issues)
-    // This ensures the background color covers the entire viewport, even outside the React root
-    document.body.style.backgroundColor = '#0f172a'; // slate-900
-    document.body.style.margin = '0';
-    document.body.style.minHeight = '100vh';
-    
-    // Cleanup defaults on unmount
-    return () => {
-      document.body.style.backgroundColor = '';
-      document.body.style.margin = '';
-      document.body.style.minHeight = '';
-    };
-  }, []);
-
   // Load data from local storage on mount
   useEffect(() => {
     const savedData = localStorage.getItem('fasting_app_data');
@@ -140,8 +115,6 @@ export default function App() {
   const isGoalReached = elapsed >= goalMs;
 
   return (
-    // UPDATED: Changed min-h-[100dvh] to min-h-screen for better compatibility
-    // The useEffect above handles the body background color to prevent gaps
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500 selection:text-white flex flex-col">
       
       {/* Header */}
