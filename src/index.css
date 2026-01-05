@@ -1,7 +1,6 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
 /* Ensure the app is always full screen and dark */
 body {
     background-color: #0f172a; /* slate-900 */
