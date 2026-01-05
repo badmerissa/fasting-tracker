@@ -248,6 +248,13 @@ export default function App() {
 
       </main>
 
+      {/* Footer */}
+      <footer className="py-6 text-center text-xs text-slate-600">
+        <p>
+          Part of the <a href="https://the-helpful-dev.vercel.app/" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-blue-400 transition-colors">The Helpful Dev</a> Network
+        </p>
+      </footer>
+
       {/* History Modal */}
       {showHistory && (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
