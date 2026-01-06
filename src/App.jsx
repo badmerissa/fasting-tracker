@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+
+import { Analytics } from "@vercel/analytics/react"; 
 import { Play, Square, Clock, Calendar, Trophy, ChevronDown, CheckCircle2, Settings, Heart, ExternalLink, X } from 'lucide-react';
 
 const FASTING_MODES = [
@@ -18,6 +20,7 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showManualStart, setShowManualStart] = useState(false);
   
   // Load data from local storage on mount
   useEffect(() => {
@@ -99,6 +102,26 @@ export default function App() {
       // Start Fast
       setStartTime(Date.now());
       setIsFasting(true);
+    }
+  };
+
+  const handleManualStartSubmit = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const dateStr = formData.get('startTime');
+    
+    if (dateStr) {
+      const timestamp = new Date(dateStr).getTime();
+      
+      // Basic validation to prevent future dates if desired, 
+      // but strictly speaking user might want to set it a minute ahead.
+      // Generally for "already fasting" it implies past.
+      
+      if (isNaN(timestamp)) return;
+
+      setStartTime(timestamp);
+      setIsFasting(true);
+      setShowManualStart(false);
     }
   };
 
@@ -216,27 +239,38 @@ export default function App() {
           )}
         </div>
 
-        {/* Action Button */}
-        <button
-          onClick={handleToggleFast}
-          className={`
-            w-full py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300 transform active:scale-95 shadow-lg
-            ${isFasting 
-              ? 'bg-slate-800 text-red-400 hover:bg-slate-700 border border-slate-700' 
-              : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
-            }
-          `}
-        >
-          {isFasting ? (
-            <>
-              <Square className="w-5 h-5 fill-current" /> Stop Fasting
-            </>
-          ) : (
-            <>
-              <Play className="w-5 h-5 fill-current" /> Start Fasting
-            </>
+        {/* Action Button & Manual Start Link */}
+        <div className="w-full flex flex-col items-center gap-4">
+          <button
+            onClick={handleToggleFast}
+            className={`
+              w-full py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300 transform active:scale-95 shadow-lg
+              ${isFasting 
+                ? 'bg-slate-800 text-red-400 hover:bg-slate-700 border border-slate-700' 
+                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
+              }
+            `}
+          >
+            {isFasting ? (
+              <>
+                <Square className="w-5 h-5 fill-current" /> Stop Fasting
+              </>
+            ) : (
+              <>
+                <Play className="w-5 h-5 fill-current" /> Start Fasting
+              </>
+            )}
+          </button>
+
+          {!isFasting && (
+            <button 
+              onClick={() => setShowManualStart(true)}
+              className="text-slate-500 hover:text-blue-400 text-sm font-medium transition-colors"
+            >
+              Already fasting?
+            </button>
           )}
-        </button>
+        </div>
 
         {/* Status Message */}
         {isFasting && isGoalReached && (
@@ -273,7 +307,10 @@ export default function App() {
                   history.map((entry) => (
                     <div key={entry.id} className="bg-slate-800/50 p-4 rounded-xl flex justify-between items-center border border-slate-700/50">
                         <div>
-                            <div className="text-sm text-slate-400 mb-1">{formatDate(entry.end)}</div>
+                            <div className="flex flex-col mb-1">
+                                <span className="text-xs text-slate-500">Start: {formatDate(entry.start)}</span>
+                                <span className="text-sm text-slate-400">End: {formatDate(entry.end)}</span>
+                            </div>
                             <div className="font-mono font-medium text-lg text-white">
                                 {formatTime(entry.duration)}
                             </div>
@@ -352,6 +389,46 @@ export default function App() {
             </div>
         </div>
       )}
+
+      {/* Manual Start Modal */}
+      {showManualStart && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
+                <button 
+                    onClick={() => setShowManualStart(false)}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Clock className="w-5 h-5 text-blue-400" /> Set Start Time
+                </h2>
+                
+                <p className="text-sm text-slate-400 mb-6">
+                    Forgot to start the timer? No problem. Pick when you started fasting.
+                </p>
+
+                <form onSubmit={handleManualStartSubmit} className="space-y-4">
+                    <input 
+                        type="datetime-local" 
+                        name="startTime"
+                        required
+                        max={new Date().toISOString().slice(0, 16)}
+                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                    />
+                    
+                    <button 
+                        type="submit"
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors"
+                    >
+                        Start Fasting
+                    </button>
+                </form>
+            </div>
+        </div>
+      )}
+      {<Analytics />}
     </div>
   );
 }
