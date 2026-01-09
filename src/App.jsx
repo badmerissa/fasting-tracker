@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-// UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT
-// import { Analytics } from "@vercel/analytics/react"; 
+
+import { Analytics } from "@vercel/analytics/react"; 
 import { Play, Square, Clock, Calendar, Trophy, ChevronDown, CheckCircle2, Settings, Heart, ExternalLink, X, Pencil, Flame, Trash2, Info } from 'lucide-react';
 
 const FASTING_MODES = [
@@ -661,7 +661,9 @@ export default function App() {
             </div>
         </div>
       )}
-      {<Analytics /> }
+	  
+	  {/* UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT */}
+      { <Analytics /> }
     </div>
   );
 }
