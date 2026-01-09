@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-
-import { Analytics } from "@vercel/analytics/react"; 
-import { Play, Square, Clock, Calendar, Trophy, ChevronDown, CheckCircle2, Settings, Heart, ExternalLink, X } from 'lucide-react';
+// UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT
+// import { Analytics } from "@vercel/analytics/react"; 
+import { Play, Square, Clock, Calendar, Trophy, ChevronDown, CheckCircle2, Settings, Heart, ExternalLink, X, Pencil, Flame, Trash2, Info } from 'lucide-react';
 
 const FASTING_MODES = [
   { label: '16:8 (Lean Gains)', hours: 16 },
@@ -21,6 +21,9 @@ export default function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showManualStart, setShowManualStart] = useState(false);
+  const [editingEntry, setEditingEntry] = useState(null);
+  const [entryToDelete, setEntryToDelete] = useState(null);
+  const [showProtocolHint, setShowProtocolHint] = useState(false); // Tooltip state
   
   // Load data from local storage on mount
   useEffect(() => {
@@ -77,6 +80,59 @@ export default function App() {
     });
   };
 
+  const getLocalISOString = (date) => {
+    const d = date ? new Date(date) : new Date();
+    const offset = d.getTimezoneOffset() * 60000;
+    return (new Date(d.getTime() - offset)).toISOString().slice(0, 16);
+  };
+
+  const calculateStreak = () => {
+    // 1. Get all successful fasts
+    const successfulFasts = history.filter(h => h.metGoal);
+    if (successfulFasts.length === 0) return 0;
+
+    // 2. Get unique dates (normalized to midnight)
+    const uniqueDates = new Set(
+      successfulFasts.map(f => new Date(f.end).setHours(0, 0, 0, 0))
+    );
+
+    let streak = 0;
+    let checkDate = new Date();
+    checkDate.setHours(0, 0, 0, 0); // Start with Today
+
+    // 3. Logic:
+    // If we fasted Today, streak starts at 1, next check is Yesterday.
+    // If NOT Today, but we fasted Yesterday, streak starts at 1, next check is Day Before Yesterday.
+    // If neither, streak is 0.
+
+    if (uniqueDates.has(checkDate.getTime())) {
+      streak = 1;
+      checkDate.setDate(checkDate.getDate() - 1);
+    } else {
+      checkDate.setDate(checkDate.getDate() - 1); // Check yesterday
+      if (uniqueDates.has(checkDate.getTime())) {
+        streak = 1;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        return 0;
+      }
+    }
+
+    // 4. Count backwards
+    while (true) {
+      if (uniqueDates.has(checkDate.getTime())) {
+        streak++;
+        checkDate.setDate(checkDate.getDate() - 1);
+      } else {
+        break;
+      }
+    }
+
+    return streak;
+  };
+
+  const currentStreak = calculateStreak();
+
   // Actions
   const handleToggleFast = () => {
     if (isFasting) {
@@ -113,10 +169,6 @@ export default function App() {
     if (dateStr) {
       const timestamp = new Date(dateStr).getTime();
       
-      // Basic validation to prevent future dates if desired, 
-      // but strictly speaking user might want to set it a minute ahead.
-      // Generally for "already fasting" it implies past.
-      
       if (isNaN(timestamp)) return;
 
       setStartTime(timestamp);
@@ -129,6 +181,62 @@ export default function App() {
     if(window.confirm("Are you sure you want to clear all history? This cannot be undone.")) {
         setHistory([]);
         setShowSettings(false);
+    }
+  };
+
+  const handleDeleteEntry = (entry) => {
+    setEntryToDelete(entry);
+    setShowHistory(false); // Close history temporarily
+  };
+
+  const confirmDelete = () => {
+    if (entryToDelete) {
+        setHistory(history.filter(h => h.id !== entryToDelete.id));
+        setEntryToDelete(null);
+        setShowHistory(true); // Return to history
+    }
+  };
+
+  const cancelDelete = () => {
+    setEntryToDelete(null);
+    setShowHistory(true); // Return to history
+  };
+
+  const handleEditEntry = (entry) => {
+    setEditingEntry(entry);
+    setShowHistory(false); // Close history temporarily
+  };
+
+  const handleUpdateEntry = (e) => {
+    e.preventDefault();
+    const formData = new FormData(e.target);
+    const startStr = formData.get('startTime');
+    const endStr = formData.get('endTime');
+
+    if (startStr && endStr) {
+      const newStart = new Date(startStr).getTime();
+      const newEnd = new Date(endStr).getTime();
+
+      if (newEnd <= newStart) {
+        alert("End time must be after start time");
+        return;
+      }
+
+      const durationMs = newEnd - newStart;
+      const durationHours = durationMs / (1000 * 60 * 60);
+      const goalMet = durationHours >= editingEntry.goal;
+
+      const updatedEntry = {
+        ...editingEntry,
+        start: newStart,
+        end: newEnd,
+        duration: durationMs,
+        metGoal: goalMet
+      };
+
+      setHistory(history.map(item => item.id === editingEntry.id ? updatedEntry : item));
+      setEditingEntry(null);
+      setShowHistory(true); // Re-open history
     }
   };
 
@@ -167,26 +275,32 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center gap-8">
         
-        {/* Mode Selector */}
-        {!isFasting && (
-          <div className="w-full relative group animate-in slide-in-from-bottom-5 duration-500">
-            <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block ml-1">
-              Select Protocol
-            </label>
-            <div className="relative">
-              <select 
-                value={JSON.stringify(selectedMode)}
-                onChange={(e) => setSelectedMode(JSON.parse(e.target.value))}
-                className="w-full appearance-none bg-slate-800 border border-slate-700 text-white py-4 px-5 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
-              >
-                {FASTING_MODES.map((mode) => (
-                  <option key={mode.label} value={JSON.stringify(mode)}>
-                    {mode.label}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+        {/* Streak Counter (Only shows if streak > 0) */}
+        {currentStreak > 0 && (
+            <div className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-400 text-sm font-bold animate-in fade-in slide-in-from-top-4 duration-500">
+                <Flame className="w-4 h-4 fill-current" />
+                <span>{currentStreak} Day Streak</span>
             </div>
+        )}
+
+        {/* Current Protocol Display (Info Icon) */}
+        {!isFasting && (
+          <div className="relative z-0 flex flex-col items-center gap-2 animate-in slide-in-from-bottom-5 duration-500">
+            <button 
+                className="group relative flex items-center gap-2 px-5 py-2.5 bg-slate-800/50 hover:bg-slate-800 rounded-full border border-slate-700/50 hover:border-slate-600 transition-all text-slate-300 text-sm font-medium"
+                onClick={() => setShowProtocolHint(!showProtocolHint)}
+                onMouseEnter={() => setShowProtocolHint(true)}
+                onMouseLeave={() => setShowProtocolHint(false)}
+            >
+                <span>{selectedMode.label}</span>
+                <Info className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors" />
+                
+                {/* Tooltip */}
+                <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-400 text-center shadow-2xl transition-all duration-200 pointer-events-none z-20 ${showProtocolHint ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
+                    Configure your fasting protocol in the Settings menu.
+                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
+                </div>
+            </button>
           </div>
         )}
 
@@ -306,7 +420,7 @@ export default function App() {
               ) : (
                   history.map((entry) => (
                     <div key={entry.id} className="bg-slate-800/50 p-4 rounded-xl flex justify-between items-center border border-slate-700/50">
-                        <div>
+                        <div className="flex-1">
                             <div className="flex flex-col mb-1">
                                 <span className="text-xs text-slate-500">Start: {formatDate(entry.start)}</span>
                                 <span className="text-sm text-slate-400">End: {formatDate(entry.end)}</span>
@@ -315,7 +429,7 @@ export default function App() {
                                 {formatTime(entry.duration)}
                             </div>
                         </div>
-                        <div className="flex flex-col items-end">
+                        <div className="flex flex-col items-end gap-2">
                             {entry.metGoal ? (
                                 <span className="flex items-center gap-1 text-xs font-bold text-green-400 bg-green-900/30 px-2 py-1 rounded-full border border-green-500/20">
                                     <CheckCircle2 className="w-3 h-3" /> GOAL MET
@@ -325,12 +439,56 @@ export default function App() {
                                     {entry.goal}H TARGET
                                 </span>
                             )}
+                            <div className="flex gap-1">
+                                <button 
+                                    onClick={() => handleEditEntry(entry)}
+                                    className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-700/50 rounded-full transition-all"
+                                    title="Edit"
+                                >
+                                    <Pencil className="w-4 h-4" />
+                                </button>
+                                <button 
+                                    onClick={() => handleDeleteEntry(entry)}
+                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700/50 rounded-full transition-all"
+                                    title="Delete"
+                                >
+                                    <Trash2 className="w-4 h-4" />
+                                </button>
+                            </div>
                         </div>
                     </div>
                   ))
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {entryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
+                    <Trash2 className="w-5 h-5 text-red-400" /> Delete Entry
+                </h2>
+                <p className="text-slate-300 mb-6">
+                    Are you sure you want to delete the fast from <span className="text-white font-medium">{formatDate(entryToDelete.start)}</span>? This cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                    <button 
+                        onClick={cancelDelete}
+                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors"
+                    >
+                        Cancel
+                    </button>
+                    <button 
+                        onClick={confirmDelete}
+                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors"
+                    >
+                        Delete
+                    </button>
+                </div>
+            </div>
         </div>
       )}
 
@@ -350,6 +508,27 @@ export default function App() {
                 </h2>
 
                 <div className="space-y-6">
+                    {/* Protocol Selection (Moved here) */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-semibold text-slate-400 uppercase tracking-wider block">
+                            Fasting Protocol
+                        </label>
+                        <div className="relative">
+                            <select 
+                                value={JSON.stringify(selectedMode)}
+                                onChange={(e) => setSelectedMode(JSON.parse(e.target.value))}
+                                className="w-full appearance-none bg-slate-800 border border-slate-700 text-white py-4 px-5 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
+                            >
+                                {FASTING_MODES.map((mode) => (
+                                <option key={mode.label} value={JSON.stringify(mode)}>
+                                    {mode.label}
+                                </option>
+                                ))}
+                            </select>
+                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                        </div>
+                    </div>
+
                     {/* Data Management */}
                     <div className="space-y-2">
                         <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Data</h3>
@@ -414,7 +593,7 @@ export default function App() {
                         type="datetime-local" 
                         name="startTime"
                         required
-                        max={new Date().toISOString().slice(0, 16)}
+                        max={getLocalISOString()}
                         className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
                     />
                     
@@ -428,7 +607,63 @@ export default function App() {
             </div>
         </div>
       )}
-      {<Analytics />}
+
+      {/* Edit Entry Modal */}
+      {editingEntry && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
+                <button 
+                    onClick={() => {
+                        setEditingEntry(null);
+                        setShowHistory(true);
+                    }}
+                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+
+                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Pencil className="w-5 h-5 text-blue-400" /> Edit Fast
+                </h2>
+                
+                <form onSubmit={handleUpdateEntry} className="space-y-4">
+                    <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Start Time</label>
+                        <input 
+                            type="datetime-local" 
+                            name="startTime"
+                            required
+                            defaultValue={getLocalISOString(editingEntry.start)}
+                            max={getLocalISOString()}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">End Time</label>
+                        <input 
+                            type="datetime-local" 
+                            name="endTime"
+                            required
+                            defaultValue={getLocalISOString(editingEntry.end)}
+                            max={getLocalISOString()}
+                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+                        />
+                    </div>
+                    
+                    <button 
+                        type="submit"
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors"
+                    >
+                        Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+      )}
+
+      {/* UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT */}
+      {/* <Analytics /> */}
     </div>
   );
 }
