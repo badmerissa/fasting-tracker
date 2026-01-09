@@ -661,9 +661,7 @@ export default function App() {
             </div>
         </div>
       )}
-
-      {/* UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT */}
-      {/* <Analytics /> */}
+      {<Analytics /> }
     </div>
   );
 }
