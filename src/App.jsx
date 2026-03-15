@@ -1,161 +1,194 @@
-import React, { useState, useEffect } from 'react';
-
-import { Analytics } from "@vercel/analytics/react"; 
-import { Play, Square, Clock, Calendar, Trophy, ChevronDown, CheckCircle2, Settings, Heart, ExternalLink, X, Pencil, Flame, Trash2, Info } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Analytics } from "@vercel/analytics/react";
+import {
+  Square, Clock, Calendar, CheckCircle2, Settings,
+  Heart, ExternalLink, X, Pencil, Flame, Trash2,
+  Sun, Moon, MoreHorizontal,
+} from 'lucide-react';
 
 const FASTING_MODES = [
   { label: '16:8 (Lean Gains)', hours: 16 },
-  { label: '18:6 (Warrior)', hours: 18 },
-  { label: '20:4 (OMAD)', hours: 20 },
-  { label: '12:12 (Beginner)', hours: 12 },
-  { label: 'Custom Test (1 min)', hours: 0.017 }, // For testing
+  { label: '18:6 (Warrior)',    hours: 18 },
+  { label: '20:4 (OMAD)',       hours: 20 },
+  { label: '12:12 (Beginner)',  hours: 12 },
+  { label: 'Custom Test (1 min)', hours: 0.017 },
 ];
 
+const getModeShortLabel = (mode) =>
+  mode.label.includes('Test') ? 'Test' : mode.label.split(' ')[0];
+
+// SVG ring constants (viewBox 300×300)
+const RING_R    = 135;
+const RING_CIRC = Math.round(2 * Math.PI * RING_R); // 848
+
 export default function App() {
-  // State
-  const [isFasting, setIsFasting] = useState(false);
-  const [startTime, setStartTime] = useState(null);
-  const [elapsed, setElapsed] = useState(0);
+  // ── Existing data state (schema untouched) ──────────────
+  const [isFasting,    setIsFasting]    = useState(false);
+  const [startTime,    setStartTime]    = useState(null);
+  const [elapsed,      setElapsed]      = useState(0);
   const [selectedMode, setSelectedMode] = useState(FASTING_MODES[0]);
-  const [history, setHistory] = useState([]);
-  const [showHistory, setShowHistory] = useState(false);
-  const [showSettings, setShowSettings] = useState(false);
-  const [showManualStart, setShowManualStart] = useState(false);
-  const [editingEntry, setEditingEntry] = useState(null);
-  const [entryToDelete, setEntryToDelete] = useState(null);
-  const [showProtocolHint, setShowProtocolHint] = useState(false); // Tooltip state
-  
-  // Load data from local storage on mount
+  const [history,      setHistory]      = useState([]);
+
+  // ── Existing UI state ───────────────────────────────────
+  const [showHistory,    setShowHistory]    = useState(false);
+  const [showSettings,   setShowSettings]   = useState(false);
+  const [showManualStart,setShowManualStart] = useState(false);
+  const [editingEntry,   setEditingEntry]   = useState(null);
+
+  // ── New UI state ────────────────────────────────────────
+  const [theme,          setTheme]          = useState('light');
+  const [showToast,      setShowToast]      = useState(false);
+  const [activeMenuId,   setActiveMenuId]   = useState(null);   // three-dot menu open
+  const [deletingEntryId,setDeletingEntryId]= useState(null);   // inline delete confirm
+  const [editError,      setEditError]      = useState('');
+
+  const deleteTimerRef = useRef(null);
+  const toastShownRef  = useRef(false);
+
+  // ── Load from localStorage ──────────────────────────────
   useEffect(() => {
     const savedData = localStorage.getItem('fasting_app_data');
     if (savedData) {
       const parsed = JSON.parse(savedData);
       setHistory(parsed.history || []);
       setSelectedMode(parsed.selectedMode || FASTING_MODES[0]);
-      
       if (parsed.isFasting && parsed.startTime) {
         setIsFasting(true);
         setStartTime(parsed.startTime);
         setElapsed(Date.now() - parsed.startTime);
       }
     }
+    const savedTheme = localStorage.getItem('fasting_app_theme');
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else {
+      setTheme(window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    }
   }, []);
 
-  // Save data whenever state changes
+  // ── Save data to localStorage ───────────────────────────
   useEffect(() => {
-    const dataToSave = {
-      history,
-      selectedMode,
-      isFasting,
-      startTime
-    };
-    localStorage.setItem('fasting_app_data', JSON.stringify(dataToSave));
+    localStorage.setItem('fasting_app_data',
+      JSON.stringify({ history, selectedMode, isFasting, startTime }));
   }, [history, selectedMode, isFasting, startTime]);
 
-  // Timer logic
+  // ── Apply dark class + persist theme ───────────────────
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', theme === 'dark');
+    localStorage.setItem('fasting_app_theme', theme);
+  }, [theme]);
+
+  // ── Timer ───────────────────────────────────────────────
   useEffect(() => {
     let interval;
     if (isFasting && startTime) {
-      interval = setInterval(() => {
-        setElapsed(Date.now() - startTime);
-      }, 1000);
+      interval = setInterval(() => setElapsed(Date.now() - startTime), 1000);
     } else {
       setElapsed(0);
     }
     return () => clearInterval(interval);
   }, [isFasting, startTime]);
 
-  // Format Helpers
+  // ── Derived progress values ─────────────────────────────
+  const goalMs        = selectedMode.hours * 60 * 60 * 1000;
+  const progressPercent = Math.min((elapsed / goalMs) * 100, 100);
+  const isGoalReached   = isFasting && elapsed >= goalMs;
+
+  // ── Goal-reached toast (fires once per fast) ────────────
+  useEffect(() => {
+    if (isGoalReached && !toastShownRef.current) {
+      toastShownRef.current = true;
+      setShowToast(true);
+      const t = setTimeout(() => setShowToast(false), 3000);
+      return () => clearTimeout(t);
+    }
+    if (!isFasting) toastShownRef.current = false;
+  }, [isGoalReached, isFasting]);
+
+  // ── Inline delete auto-confirm after 3 s ───────────────
+  useEffect(() => {
+    if (deletingEntryId) {
+      deleteTimerRef.current = setTimeout(() => {
+        setHistory(prev => prev.filter(h => h.id !== deletingEntryId));
+        setDeletingEntryId(null);
+      }, 3000);
+    }
+    return () => clearTimeout(deleteTimerRef.current);
+  }, [deletingEntryId]);
+
+  // ── Format helpers ──────────────────────────────────────
   const formatTime = (ms) => {
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+    const s   = Math.floor(ms / 1000);
+    const h   = Math.floor(s / 3600);
+    const m   = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`;
   };
 
-  const formatDate = (timestamp) => {
-    return new Date(timestamp).toLocaleDateString(undefined, {
-      month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-    });
+  const formatDurationShort = (ms) => {
+    if (!ms) return '—';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    if (h === 0) return `${m}m`;
+    if (m === 0) return `${h}h`;
+    return `${h}h ${m}m`;
   };
 
   const getLocalISOString = (date) => {
     const d = date ? new Date(date) : new Date();
-    const offset = d.getTimezoneOffset() * 60000;
-    return (new Date(d.getTime() - offset)).toISOString().slice(0, 16);
+    return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   };
 
+  // ── Streak calculation (unchanged logic) ────────────────
   const calculateStreak = () => {
-    // 1. Get all successful fasts
     const successfulFasts = history.filter(h => h.metGoal);
-    if (successfulFasts.length === 0) return 0;
-
-    // 2. Get unique dates (normalized to midnight)
+    if (!successfulFasts.length) return 0;
     const uniqueDates = new Set(
       successfulFasts.map(f => new Date(f.end).setHours(0, 0, 0, 0))
     );
-
     let streak = 0;
     let checkDate = new Date();
-    checkDate.setHours(0, 0, 0, 0); // Start with Today
-
-    // 3. Logic:
-    // If we fasted Today, streak starts at 1, next check is Yesterday.
-    // If NOT Today, but we fasted Yesterday, streak starts at 1, next check is Day Before Yesterday.
-    // If neither, streak is 0.
-
+    checkDate.setHours(0, 0, 0, 0);
     if (uniqueDates.has(checkDate.getTime())) {
       streak = 1;
       checkDate.setDate(checkDate.getDate() - 1);
     } else {
-      checkDate.setDate(checkDate.getDate() - 1); // Check yesterday
+      checkDate.setDate(checkDate.getDate() - 1);
       if (uniqueDates.has(checkDate.getTime())) {
         streak = 1;
         checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        return 0;
-      }
+      } else return 0;
     }
-
-    // 4. Count backwards
-    while (true) {
-      if (uniqueDates.has(checkDate.getTime())) {
-        streak++;
-        checkDate.setDate(checkDate.getDate() - 1);
-      } else {
-        break;
-      }
+    while (uniqueDates.has(checkDate.getTime())) {
+      streak++;
+      checkDate.setDate(checkDate.getDate() - 1);
     }
-
     return streak;
   };
 
   const currentStreak = calculateStreak();
 
-  // Actions
+  // ── Summary stats (computed from existing history) ──────
+  const longestFast  = history.length ? Math.max(...history.map(h => h.duration)) : 0;
+  const totalFasts   = history.length;
+  const avgDuration  = history.length
+    ? history.reduce((s, h) => s + h.duration, 0) / history.length
+    : 0;
+
+  // ── Action handlers (logic unchanged) ──────────────────
   const handleToggleFast = () => {
     if (isFasting) {
-      // End Fast
-      const endTime = Date.now();
+      const endTime    = Date.now();
       const durationMs = endTime - startTime;
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const goalMet = durationHours >= selectedMode.hours;
-
-      const newEntry = {
-        id: Date.now(),
-        start: startTime,
-        end: endTime,
-        duration: durationMs,
-        goal: selectedMode.hours,
-        metGoal: goalMet
-      };
-
-      setHistory([newEntry, ...history]);
+      const goalMet    = (durationMs / 3600000) >= selectedMode.hours;
+      setHistory([
+        { id: Date.now(), start: startTime, end: endTime,
+          duration: durationMs, goal: selectedMode.hours, metGoal: goalMet },
+        ...history,
+      ]);
       setIsFasting(false);
       setStartTime(null);
     } else {
-      // Start Fast
       setStartTime(Date.now());
       setIsFasting(true);
     }
@@ -163,507 +196,768 @@ export default function App() {
 
   const handleManualStartSubmit = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const dateStr = formData.get('startTime');
-    
+    const dateStr = new FormData(e.target).get('startTime');
     if (dateStr) {
-      const timestamp = new Date(dateStr).getTime();
-      
-      if (isNaN(timestamp)) return;
-
-      setStartTime(timestamp);
-      setIsFasting(true);
-      setShowManualStart(false);
+      const ts = new Date(dateStr).getTime();
+      if (!isNaN(ts)) {
+        setStartTime(ts);
+        setIsFasting(true);
+        setShowManualStart(false);
+      }
     }
   };
 
   const handleResetHistory = () => {
-    if(window.confirm("Are you sure you want to clear all history? This cannot be undone.")) {
-        setHistory([]);
-        setShowSettings(false);
+    if (window.confirm('Are you sure you want to clear all history? This cannot be undone.')) {
+      setHistory([]);
+      setShowSettings(false);
     }
-  };
-
-  const handleDeleteEntry = (entry) => {
-    setEntryToDelete(entry);
-    setShowHistory(false); // Close history temporarily
-  };
-
-  const confirmDelete = () => {
-    if (entryToDelete) {
-        setHistory(history.filter(h => h.id !== entryToDelete.id));
-        setEntryToDelete(null);
-        setShowHistory(true); // Return to history
-    }
-  };
-
-  const cancelDelete = () => {
-    setEntryToDelete(null);
-    setShowHistory(true); // Return to history
   };
 
   const handleEditEntry = (entry) => {
+    setEditError('');
     setEditingEntry(entry);
-    setShowHistory(false); // Close history temporarily
+    setShowHistory(false);
+    setActiveMenuId(null);
   };
 
   const handleUpdateEntry = (e) => {
     e.preventDefault();
-    const formData = new FormData(e.target);
-    const startStr = formData.get('startTime');
-    const endStr = formData.get('endTime');
-
-    if (startStr && endStr) {
-      const newStart = new Date(startStr).getTime();
-      const newEnd = new Date(endStr).getTime();
-
-      if (newEnd <= newStart) {
-        alert("End time must be after start time");
-        return;
-      }
-
-      const durationMs = newEnd - newStart;
-      const durationHours = durationMs / (1000 * 60 * 60);
-      const goalMet = durationHours >= editingEntry.goal;
-
-      const updatedEntry = {
-        ...editingEntry,
-        start: newStart,
-        end: newEnd,
-        duration: durationMs,
-        metGoal: goalMet
-      };
-
-      setHistory(history.map(item => item.id === editingEntry.id ? updatedEntry : item));
-      setEditingEntry(null);
-      setShowHistory(true); // Re-open history
+    const fd       = new FormData(e.target);
+    const newStart = new Date(fd.get('startTime')).getTime();
+    const newEnd   = new Date(fd.get('endTime')).getTime();
+    if (newEnd <= newStart) {
+      setEditError('End time must be after start time.');
+      return;
     }
+    setEditError('');
+    const durationMs = newEnd - newStart;
+    const goalMet    = (durationMs / 3600000) >= editingEntry.goal;
+    setHistory(history.map(item =>
+      item.id === editingEntry.id
+        ? { ...editingEntry, start: newStart, end: newEnd, duration: durationMs, metGoal: goalMet }
+        : item
+    ));
+    setEditingEntry(null);
+    setShowHistory(true);
   };
 
-  // Progress Calculation
-  const goalMs = selectedMode.hours * 60 * 60 * 1000;
-  const progressPercent = Math.min((elapsed / goalMs) * 100, 100);
-  const isGoalReached = elapsed >= goalMs;
+  // ── Inline delete handlers ──────────────────────────────
+  const handleInlineDelete = (entryId) => {
+    setActiveMenuId(null);
+    setDeletingEntryId(entryId);
+  };
 
+  const handleUndoDelete = () => setDeletingEntryId(null);
+
+  const handleConfirmDeleteNow = () => {
+    setHistory(prev => prev.filter(h => h.id !== deletingEntryId));
+    setDeletingEntryId(null);
+  };
+
+  const closeHistory = () => {
+    setShowHistory(false);
+    setActiveMenuId(null);
+    setDeletingEntryId(null);
+  };
+
+  // ── Shared modal classes ────────────────────────────────
+  const overlayClass = 'fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-[4px]';
+  const sheetClass   = 'modal-sheet w-full sm:max-w-[480px] sm:w-[calc(100%-48px)] max-h-[90vh] flex flex-col overflow-hidden rounded-t-[20px] sm:rounded-[20px] shadow-2xl';
+
+  // ── Drag handle (mobile only) ───────────────────────────
+  const DragHandle = () => (
+    <div className="flex justify-center pt-3 pb-1 sm:hidden" aria-hidden="true">
+      <div className="w-8 h-1 rounded-full" style={{ background: 'var(--border)' }} />
+    </div>
+  );
+
+  // ── Modal header row ────────────────────────────────────
+  const ModalHeader = ({ title, onClose }) => (
+    <div className="flex justify-between items-center px-6 py-4"
+         style={{ borderBottom: '1px solid var(--border)' }}>
+      <h2 className="text-xl font-serif" style={{ color: 'var(--text-primary)' }}>{title}</h2>
+      <button
+        onClick={onClose}
+        aria-label="Close"
+        className="w-8 h-8 flex items-center justify-center rounded-full hover:opacity-70 transition-opacity"
+        style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+      >
+        <X size={16} strokeWidth={1.5} />
+      </button>
+    </div>
+  );
+
+  // ────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 font-sans selection:bg-blue-500 selection:text-white flex flex-col">
-      
-      {/* Header */}
-      <header className="p-6 flex justify-between items-center bg-slate-800/50 backdrop-blur-md sticky top-0 z-10 border-b border-slate-700/50 shrink-0">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Clock className="w-6 h-6 text-blue-400" />
-          Fasting<span className="text-blue-400">Tracker</span>
+    <div className="min-h-screen flex flex-col" style={{ background: 'var(--bg-base)', color: 'var(--text-primary)' }}>
+
+      {/* ── Header ────────────────────────────────────────── */}
+      <header
+        className="h-14 px-6 flex justify-between items-center sticky top-0 z-10 shrink-0"
+        style={{ background: 'var(--bg-base)', borderBottom: '1px solid var(--border)' }}
+      >
+        <h1 className="text-xl font-serif tracking-[-0.01em]">
+          Fasting<span style={{ color: 'var(--accent)' }}>Tracker</span>
         </h1>
-        <div className="flex gap-2">
-            <button 
-                onClick={() => setShowHistory(!showHistory)}
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors"
-                title="History"
-            >
-                <Calendar className="w-5 h-5 text-slate-300" />
-            </button>
-            <button 
-                onClick={() => setShowSettings(true)}
-                className="p-2 bg-slate-800 hover:bg-slate-700 rounded-full transition-colors"
-                title="Settings"
-            >
-                <Settings className="w-5 h-5 text-slate-300" />
-            </button>
+
+        <div className="flex items-center gap-2">
+          {/* History — given visual priority with slightly bolder background */}
+          <button
+            onClick={() => setShowHistory(true)}
+            title="History"
+            aria-label="View fasting history"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border)' }}
+          >
+            <Calendar size={16} strokeWidth={1.5} />
+          </button>
+
+          {/* Theme toggle */}
+          <button
+            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+            aria-label="Toggle theme"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            {theme === 'dark' ? <Sun size={16} strokeWidth={1.5} /> : <Moon size={16} strokeWidth={1.5} />}
+          </button>
+
+          {/* Settings */}
+          <button
+            onClick={() => setShowSettings(true)}
+            title="Settings"
+            aria-label="Open settings"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            <Settings size={16} strokeWidth={1.5} />
+          </button>
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className="flex-1 w-full max-w-md mx-auto p-6 flex flex-col items-center justify-center gap-8">
-        
-        {/* Streak Counter (Only shows if streak > 0) */}
-        {currentStreak > 0 && (
-            <div className="flex items-center gap-2 px-4 py-2 bg-orange-500/10 border border-orange-500/20 rounded-full text-orange-400 text-sm font-bold animate-in fade-in slide-in-from-top-4 duration-500">
-                <Flame className="w-4 h-4 fill-current" />
-                <span>{currentStreak} Day Streak</span>
-            </div>
-        )}
+      {/* ── Main hero zone ─────────────────────────────────── */}
+      <main className="flex-1 w-full max-w-md mx-auto px-6 pt-8 pb-4 flex flex-col items-center gap-6">
 
-        {/* Current Protocol Display (Info Icon) */}
-        {!isFasting && (
-          <div className="relative z-0 flex flex-col items-center gap-2 animate-in slide-in-from-bottom-5 duration-500">
-            <button 
-                className="group relative flex items-center gap-2 px-5 py-2.5 bg-slate-800/50 hover:bg-slate-800 rounded-full border border-slate-700/50 hover:border-slate-600 transition-all text-slate-300 text-sm font-medium"
-                onClick={() => setShowProtocolHint(!showProtocolHint)}
-                onMouseEnter={() => setShowProtocolHint(true)}
-                onMouseLeave={() => setShowProtocolHint(false)}
-            >
-                <span>{selectedMode.label}</span>
-                <Info className="w-4 h-4 text-slate-500 group-hover:text-blue-400 transition-colors" />
-                
-                {/* Tooltip */}
-                <div className={`absolute bottom-full mb-3 left-1/2 -translate-x-1/2 w-48 p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-400 text-center shadow-2xl transition-all duration-200 pointer-events-none z-20 ${showProtocolHint ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2'}`}>
-                    Configure your fasting protocol in the Settings menu.
-                    <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-slate-900"></div>
-                </div>
-            </button>
+        {/* Streak badge */}
+        {currentStreak > 0 && (
+          <div
+            className="streak-in flex items-center gap-2 px-4 py-1.5 rounded-full text-[13px] font-semibold"
+            style={{ background: 'rgba(196,154,60,0.12)', color: 'var(--accent-gold)' }}
+            aria-label={`${currentStreak}-day streak`}
+          >
+            <Flame size={16} strokeWidth={1.5} />
+            {currentStreak}-day streak
           </div>
         )}
 
-        {/* Timer UI */}
-        <div className="relative w-72 h-72 flex items-center justify-center shrink-0">
-          {/* Background Ring */}
-          <div className="absolute inset-0 rounded-full border-[6px] border-slate-800"></div>
-          
-          {/* Active Ring */}
-          <svg className="absolute inset-0 w-full h-full -rotate-90">
+        {/* Protocol chip — always visible, opens settings */}
+        <button
+          onClick={() => setShowSettings(true)}
+          aria-label="Change fasting protocol"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] transition-opacity hover:opacity-70"
+          style={{
+            background: 'var(--bg-elevated)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-secondary)',
+            minHeight: 'unset',
+          }}
+        >
+          {getModeShortLabel(selectedMode)} Protocol
+          <Settings size={11} strokeWidth={1.5} />
+        </button>
+
+        {/* Progress ring */}
+        <div
+          className="relative w-[min(280px,72vw)] sm:w-[300px] aspect-square shrink-0"
+          role="img"
+          aria-label={isFasting
+            ? `Fasting in progress — ${formatTime(elapsed)} elapsed`
+            : 'Not currently fasting'}
+        >
+          {/* Glow behind ring (active fasting only) */}
+          {isFasting && (
+            <div
+              className={isGoalReached ? 'ring-glow-intense' : 'ring-glow'}
+              style={{
+                position: 'absolute', inset: 0, borderRadius: '50%',
+                background: `radial-gradient(circle, var(--${isGoalReached ? 'success' : 'accent'}) 0%, transparent 65%)`,
+                opacity: isGoalReached ? 0.2 : 0.12,
+              }}
+              aria-hidden="true"
+            />
+          )}
+
+          {/* SVG ring */}
+          <svg
+            className="absolute inset-0 w-full h-full -rotate-90"
+            viewBox="0 0 300 300"
+            aria-hidden="true"
+          >
+            {/* Track */}
+            <circle cx="150" cy="150" r={RING_R} fill="none" stroke="var(--border)" strokeWidth="10" />
+            {/* Progress fill */}
             <circle
-              cx="144"
-              cy="144"
-              r="138"
+              cx="150" cy="150" r={RING_R}
               fill="none"
-              stroke={isGoalReached ? "#22c55e" : "#ef4444"}
-              strokeWidth="6"
-              strokeDasharray="867" 
-              strokeDashoffset={867 - (867 * progressPercent) / 100}
+              stroke={isGoalReached ? 'var(--success)' : 'var(--accent)'}
+              strokeWidth="10"
+              strokeDasharray={RING_CIRC}
+              strokeDashoffset={isFasting ? RING_CIRC - (RING_CIRC * progressPercent) / 100 : RING_CIRC}
               strokeLinecap="round"
               className="transition-all duration-1000 ease-linear"
             />
           </svg>
 
-          {/* Time Display */}
-          <div className="flex flex-col items-center z-10">
-             {isFasting ? (
-                 <>
-                    <span className="text-slate-400 text-sm font-medium mb-1 tracking-widest">ELAPSED TIME</span>
-                    <span className={`text-5xl font-bold tabular-nums tracking-tight ${isGoalReached ? 'text-green-400 drop-shadow-[0_0_15px_rgba(74,222,128,0.3)]' : 'text-white'}`}>
-                    {formatTime(elapsed)}
-                    </span>
-                    <span className="text-slate-500 text-xs mt-2 font-medium bg-slate-800/80 px-3 py-1 rounded-full">
-                        Goal: {selectedMode.hours} hours
-                    </span>
-                 </>
-             ) : (
-                 <>
-                    <span className="text-slate-500 text-sm font-medium mb-2 uppercase tracking-wider">Ready to Fast?</span>
-                    <span className="text-4xl font-bold text-slate-300">
-                        {selectedMode.hours}:{(24-selectedMode.hours)}
-                    </span>
-                 </>
-             )}
-          </div>
-          
-          {/* Glowing Effect */}
-          {isFasting && (
-            <div className={`absolute inset-0 rounded-full blur-3xl opacity-10 transition-colors duration-500 ${isGoalReached ? 'bg-green-500' : 'bg-red-500'}`}></div>
-          )}
-        </div>
-
-        {/* Action Button & Manual Start Link */}
-        <div className="w-full flex flex-col items-center gap-4">
-          <button
-            onClick={handleToggleFast}
-            className={`
-              w-full py-5 rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all duration-300 transform active:scale-95 shadow-lg
-              ${isFasting 
-                ? 'bg-slate-800 text-red-400 hover:bg-slate-700 border border-slate-700' 
-                : 'bg-blue-600 text-white hover:bg-blue-500 shadow-blue-500/20'
-              }
-            `}
-          >
-            {isFasting ? (
-              <>
-                <Square className="w-5 h-5 fill-current" /> Stop Fasting
-              </>
-            ) : (
-              <>
-                <Play className="w-5 h-5 fill-current" /> Start Fasting
-              </>
-            )}
-          </button>
-
-          {!isFasting && (
-            <button 
-              onClick={() => setShowManualStart(true)}
-              className="text-slate-500 hover:text-blue-400 text-sm font-medium transition-colors"
+          {/* Timer text — overlaid in ring center */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center select-none">
+            <span
+              className="text-7xl font-serif tabular-nums leading-none tracking-[-0.02em]"
+              style={{ color: isGoalReached ? 'var(--success)' : 'var(--text-primary)' }}
             >
-              Already fasting?
-            </button>
-          )}
+              {formatTime(isFasting ? elapsed : 0)}
+            </span>
+            <span className="text-[13px] mt-2" style={{ color: 'var(--text-secondary)' }}>
+              {isFasting ? `Goal: ${selectedMode.hours}h` : 'Ready to fast'}
+            </span>
+          </div>
         </div>
 
-        {/* Status Message */}
-        {isFasting && isGoalReached && (
-            <div className="animate-bounce bg-green-500/10 border border-green-500/20 text-green-400 px-4 py-2 rounded-lg flex items-center gap-2">
-                <Trophy className="w-4 h-4" />
-                Goal reached! You can eat now.
-            </div>
-        )}
+        {/* Action button */}
+        <button
+          onClick={handleToggleFast}
+          aria-label={isFasting ? 'End fast' : 'Begin fast'}
+          className={`h-14 rounded-full text-[15px] font-semibold flex items-center justify-center gap-2 transition-all duration-200 ${isFasting ? 'btn-warn' : 'btn-primary'}`}
+          style={{
+            width: '220px',
+            background: isFasting ? 'var(--accent-warn)' : 'var(--accent)',
+            color: 'white',
+          }}
+        >
+          {isFasting
+            ? <><Square size={16} strokeWidth={1.5} fill="currentColor" /> End Fast</>
+            : 'Begin Fast'
+          }
+        </button>
 
+        {/* Manual start link — always visible, disabled while fasting */}
+        <button
+          onClick={() => !isFasting && setShowManualStart(true)}
+          aria-disabled={isFasting}
+          className="flex items-center gap-1.5 text-[13px] transition-opacity"
+          style={{
+            color: 'var(--text-secondary)',
+            opacity: isFasting ? 0.35 : 1,
+            cursor: isFasting ? 'default' : 'pointer',
+            background: 'none', border: 'none',
+            minHeight: 'unset',
+          }}
+        >
+          <Clock size={13} strokeWidth={1.5} />
+          Set start time
+        </button>
       </main>
 
-      {/* Footer */}
-      <footer className="py-6 text-center text-xs text-slate-600">
-        <p>
-          Part of the <a href="https://thehelpfuldev.com/" target="_blank" rel="noopener noreferrer" className="text-slate-500 hover:text-blue-400 transition-colors">The Helpful Dev</a> Network
-        </p>
+      {/* ── Summary strip ──────────────────────────────────── */}
+      <div className="w-full max-w-md mx-auto px-6 pb-6">
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: 'Longest Fast', value: formatDurationShort(longestFast) },
+            { label: 'Total Fasts',  value: totalFasts || '—' },
+            { label: 'Average',      value: formatDurationShort(avgDuration) },
+          ].map(({ label, value }) => (
+            <div
+              key={label}
+              className="flex flex-col gap-1 p-4 rounded-2xl"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            >
+              <span
+                className="text-[11px] font-semibold uppercase tracking-[0.03em] leading-none"
+                style={{ color: 'var(--text-secondary)' }}
+              >
+                {label}
+              </span>
+              <span
+                className="text-2xl font-serif leading-tight"
+                style={{ color: 'var(--text-primary)' }}
+              >
+                {value}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Footer ─────────────────────────────────────────── */}
+      <footer
+        className="px-6 py-4 flex justify-between items-center text-[11px]"
+        style={{ color: 'var(--text-secondary)', borderTop: '1px solid var(--border)' }}
+      >
+        <a
+          href="https://thehelpfuldev.com/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="hover:underline"
+          style={{ color: 'var(--text-secondary)', minHeight: 'unset', minWidth: 'unset' }}
+        >
+          thehelpfuldev.com
+        </a>
+        <span>Version 1.1.0</span>
       </footer>
 
-      {/* History Modal */}
+      {/* ── Goal-reached toast ─────────────────────────────── */}
+      {showToast && (
+        <div
+          role="status"
+          aria-live="polite"
+          className="toast-in fixed bottom-6 left-1/2 z-50 px-5 py-3 rounded-xl shadow-lg text-[14px] font-medium"
+          style={{
+            transform: 'translateX(-50%)',
+            background: 'var(--bg-surface)',
+            border: '1px solid var(--success)',
+            color: 'var(--text-primary)',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          Goal reached · Well done
+        </div>
+      )}
+
+      {/* ── History Modal ──────────────────────────────────── */}
       {showHistory && (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-slate-900 w-full max-w-md max-h-[80vh] rounded-3xl overflow-hidden flex flex-col shadow-2xl border border-slate-800 animate-in slide-in-from-bottom-10 duration-300">
-            <div className="p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/30">
-              <h2 className="font-bold text-lg">History</h2>
-              <button onClick={() => setShowHistory(false)} className="text-slate-400 hover:text-white">Close</button>
+        <div className={overlayClass} onClick={closeHistory}>
+          <div
+            className={sheetClass}
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="history-title"
+          >
+            <DragHandle />
+            <div className="flex justify-between items-center px-6 py-4"
+                 style={{ borderBottom: '1px solid var(--border)' }}>
+              <h2 id="history-title" className="text-xl font-serif" style={{ color: 'var(--text-primary)' }}>
+                Fasting History
+              </h2>
+              <button
+                onClick={closeHistory}
+                aria-label="Close history"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:opacity-70 transition-opacity"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+              >
+                <X size={16} strokeWidth={1.5} />
+              </button>
             </div>
-            
-            <div className="overflow-y-auto p-4 space-y-3">
+
+            <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-3">
               {history.length === 0 ? (
-                <div className="text-center py-10 text-slate-500">
-                    <p>No completed fasts yet.</p>
+                <div className="flex flex-col items-center justify-center py-16 gap-3">
+                  <Clock size={40} strokeWidth={1} style={{ color: 'var(--border)', minHeight: 'unset', minWidth: 'unset' }} />
+                  <p className="text-[15px] text-center leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    No fasts recorded yet.<br />Start your first fast above.
+                  </p>
                 </div>
               ) : (
-                  history.map((entry) => (
-                    <div key={entry.id} className="bg-slate-800/50 p-4 rounded-xl flex justify-between items-center border border-slate-700/50">
-                        <div className="flex-1">
-                            <div className="flex flex-col mb-1">
-                                <span className="text-xs text-slate-500">Start: {formatDate(entry.start)}</span>
-                                <span className="text-sm text-slate-400">End: {formatDate(entry.end)}</span>
-                            </div>
-                            <div className="font-mono font-medium text-lg text-white">
-                                {formatTime(entry.duration)}
-                            </div>
+                history.map(entry => (
+                  <div
+                    key={entry.id}
+                    className="rounded-2xl p-4"
+                    style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}
+                  >
+                    {/* Inline delete confirmation */}
+                    {deletingEntryId === entry.id ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[13px]" style={{ color: 'var(--text-secondary)' }}>
+                          Delete this entry?
+                        </span>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={handleUndoDelete}
+                            className="px-3 py-1.5 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-70"
+                            style={{
+                              background: 'var(--bg-surface)', color: 'var(--text-secondary)',
+                              border: '1px solid var(--border)', minHeight: 'unset',
+                            }}
+                          >
+                            Undo
+                          </button>
+                          <button
+                            onClick={handleConfirmDeleteNow}
+                            className="px-3 py-1.5 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-70"
+                            style={{ background: 'var(--accent-warn)', color: 'white', minHeight: 'unset' }}
+                          >
+                            Delete
+                          </button>
                         </div>
-                        <div className="flex flex-col items-end gap-2">
-                            {entry.metGoal ? (
-                                <span className="flex items-center gap-1 text-xs font-bold text-green-400 bg-green-900/30 px-2 py-1 rounded-full border border-green-500/20">
-                                    <CheckCircle2 className="w-3 h-3" /> GOAL MET
-                                </span>
-                            ) : (
-                                <span className="text-xs font-bold text-orange-400 bg-orange-900/30 px-2 py-1 rounded-full border border-orange-500/20">
-                                    {entry.goal}H TARGET
-                                </span>
-                            )}
-                            <div className="flex gap-1">
-                                <button 
-                                    onClick={() => handleEditEntry(entry)}
-                                    className="p-2 text-slate-400 hover:text-blue-400 hover:bg-slate-700/50 rounded-full transition-all"
-                                    title="Edit"
-                                >
-                                    <Pencil className="w-4 h-4" />
-                                </button>
-                                <button 
-                                    onClick={() => handleDeleteEntry(entry)}
-                                    className="p-2 text-slate-400 hover:text-red-400 hover:bg-slate-700/50 rounded-full transition-all"
-                                    title="Delete"
-                                >
-                                    <Trash2 className="w-4 h-4" />
-                                </button>
-                            </div>
+                      </div>
+                    ) : (
+                      /* Normal card view */
+                      <div className="flex items-center gap-4">
+                        {/* Date column */}
+                        <div className="flex flex-col items-center min-w-[36px]">
+                          <span className="text-xl font-serif leading-none" style={{ color: 'var(--text-primary)' }}>
+                            {new Date(entry.start).getDate()}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wide" style={{ color: 'var(--text-secondary)' }}>
+                            {new Date(entry.start).toLocaleDateString(undefined, { month: 'short' })}
+                          </span>
+                          <span className="text-[10px]" style={{ color: 'var(--text-secondary)' }}>
+                            {new Date(entry.start).toLocaleDateString(undefined, { weekday: 'short' })}
+                          </span>
                         </div>
-                    </div>
-                  ))
+
+                        {/* Vertical divider */}
+                        <div className="w-px self-stretch" style={{ background: 'var(--border)' }} aria-hidden="true" />
+
+                        {/* Duration + status */}
+                        <div className="flex-1 flex flex-col gap-1">
+                          <span className="text-2xl font-serif leading-none" style={{ color: 'var(--text-primary)' }}>
+                            {formatDurationShort(entry.duration)}
+                          </span>
+                          {entry.metGoal ? (
+                            <span
+                              className="flex items-center gap-1 text-[11px] font-semibold"
+                              style={{ color: 'var(--success)', minHeight: 'unset', minWidth: 'unset' }}
+                            >
+                              <CheckCircle2 size={11} strokeWidth={2} style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                              Goal met
+                            </span>
+                          ) : (
+                            <span className="text-[11px] font-semibold" style={{ color: 'var(--text-secondary)' }}>
+                              {entry.goal}h target
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Three-dot menu */}
+                        <div className="relative">
+                          <button
+                            onClick={() => setActiveMenuId(activeMenuId === entry.id ? null : entry.id)}
+                            aria-label="Entry options"
+                            aria-expanded={activeMenuId === entry.id}
+                            className="w-8 h-8 flex items-center justify-center rounded-full hover:opacity-70 transition-opacity"
+                            style={{ color: 'var(--text-secondary)' }}
+                          >
+                            <MoreHorizontal size={16} strokeWidth={1.5} />
+                          </button>
+
+                          {activeMenuId === entry.id && (
+                            <div
+                              className="absolute right-0 top-10 z-10 rounded-xl overflow-hidden shadow-lg"
+                              style={{
+                                background: 'var(--bg-surface)',
+                                border: '1px solid var(--border)',
+                                minWidth: '120px',
+                              }}
+                            >
+                              <button
+                                onClick={() => handleEditEntry(entry)}
+                                className="w-full flex items-center gap-2 px-4 py-3 text-[13px] text-left hover:opacity-70 transition-opacity"
+                                style={{ color: 'var(--text-primary)', minHeight: 'unset' }}
+                              >
+                                <Pencil size={13} strokeWidth={1.5} style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                                Edit
+                              </button>
+                              <div style={{ height: '1px', background: 'var(--border)' }} />
+                              <button
+                                onClick={() => handleInlineDelete(entry.id)}
+                                className="w-full flex items-center gap-2 px-4 py-3 text-[13px] text-left hover:opacity-70 transition-opacity"
+                                style={{ color: 'var(--accent-warn)', minHeight: 'unset' }}
+                              >
+                                <Trash2 size={13} strokeWidth={1.5} style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))
               )}
             </div>
           </div>
         </div>
       )}
 
-      {/* Delete Confirmation Modal */}
-      {entryToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2 text-white">
-                    <Trash2 className="w-5 h-5 text-red-400" /> Delete Entry
-                </h2>
-                <p className="text-slate-300 mb-6">
-                    Are you sure you want to delete the fast from <span className="text-white font-medium">{formatDate(entryToDelete.start)}</span>? This cannot be undone.
-                </p>
-                <div className="flex gap-3">
-                    <button 
-                        onClick={cancelDelete}
-                        className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-xl transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button 
-                        onClick={confirmDelete}
-                        className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl transition-colors"
-                    >
-                        Delete
-                    </button>
-                </div>
-            </div>
-        </div>
-      )}
-
-      {/* Settings Modal */}
+      {/* ── Settings Modal ─────────────────────────────────── */}
       {showSettings && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
-                <button 
-                    onClick={() => setShowSettings(false)}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
-                >
-                    <X className="w-5 h-5" />
-                </button>
+        <div className={overlayClass} onClick={() => setShowSettings(false)}>
+          <div
+            className={sheetClass}
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="settings-title"
+          >
+            <DragHandle />
+            <div className="flex justify-between items-center px-6 py-4"
+                 style={{ borderBottom: '1px solid var(--border)' }}>
+              <h2 id="settings-title" className="text-xl font-serif" style={{ color: 'var(--text-primary)' }}>
+                Settings
+              </h2>
+              <button
+                onClick={() => setShowSettings(false)}
+                aria-label="Close settings"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:opacity-70 transition-opacity"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+              >
+                <X size={16} strokeWidth={1.5} />
+              </button>
+            </div>
 
-                <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
-                    <Settings className="w-5 h-5 text-blue-400" /> Settings
-                </h2>
-
-                <div className="space-y-6">
-                    {/* Protocol Selection (Moved here) */}
-                    <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-400 uppercase tracking-wider block">
-                            Fasting Protocol
-                        </label>
-                        <div className="relative">
-                            <select 
-                                value={JSON.stringify(selectedMode)}
-                                onChange={(e) => setSelectedMode(JSON.parse(e.target.value))}
-                                className="w-full appearance-none bg-slate-800 border border-slate-700 text-white py-4 px-5 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/50 transition-all font-medium"
-                            >
-                                {FASTING_MODES.map((mode) => (
-                                <option key={mode.label} value={JSON.stringify(mode)}>
-                                    {mode.label}
-                                </option>
-                                ))}
-                            </select>
-                            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
-                        </div>
-                    </div>
-
-                    {/* Data Management */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Data</h3>
-                        <button 
-                            onClick={handleResetHistory} 
-                            className="w-full flex items-center justify-between p-4 bg-slate-800 rounded-xl hover:bg-red-900/20 text-slate-200 hover:text-red-400 transition-colors border border-slate-700"
-                        >
-                            <span>Clear All History</span>
-                            <span className="text-xs bg-slate-900 px-2 py-1 rounded text-slate-500">Irreversible</span>
-                        </button>
-                    </div>
-
-                    {/* Support Section */}
-                    <div className="space-y-2">
-                        <h3 className="text-sm font-semibold text-slate-400 uppercase tracking-wider">Support Development</h3>
-                        <div className="p-4 bg-gradient-to-br from-indigo-900/50 to-purple-900/50 rounded-xl border border-indigo-500/30">
-                            <p className="text-sm text-indigo-200 mb-4 leading-relaxed">
-                                Hi! I built this app to keep fasting simple. If you find it useful, consider buying me a coffee to help cover the server costs!
-                            </p>
-                            <a 
-                                href="https://ko-fi.com/robogirl96" 
-                                target="_blank" 
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-center gap-2 w-full py-3 bg-[#FF5E5B] hover:bg-[#ff4642] text-white font-bold rounded-lg transition-transform active:scale-95 shadow-lg shadow-red-900/20"
-                            >
-                                <Heart className="w-4 h-4 fill-white" />
-                                Buy me a Coffee
-                                <ExternalLink className="w-3 h-3 opacity-70" />
-                            </a>
-                        </div>
-                    </div>
-                    
-                    <div className="text-center">
-                         <p className="text-xs text-slate-600">Version 1.1.0 • Built with Gemini</p>
-                    </div>
+            <div className="overflow-y-auto flex-1 p-6 flex flex-col gap-6">
+              {/* Protocol — segmented control */}
+              <div className="flex flex-col gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                      style={{ color: 'var(--text-secondary)' }}>
+                  Protocol
+                </span>
+                <div className="flex flex-wrap gap-2">
+                  {FASTING_MODES.map(mode => {
+                    const active = selectedMode.label === mode.label;
+                    return (
+                      <button
+                        key={mode.label}
+                        onClick={() => setSelectedMode(mode)}
+                        className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all hover:opacity-80"
+                        style={{
+                          background: active ? 'var(--accent)' : 'var(--bg-elevated)',
+                          color: active ? 'white' : 'var(--text-secondary)',
+                          border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          minHeight: 'unset',
+                        }}
+                        aria-pressed={active}
+                      >
+                        {getModeShortLabel(mode)}
+                      </button>
+                    );
+                  })}
                 </div>
+              </div>
+
+              {/* Data management */}
+              <div className="flex flex-col gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                      style={{ color: 'var(--text-secondary)' }}>
+                  Data
+                </span>
+                <button
+                  onClick={handleResetHistory}
+                  className="w-full py-3 px-4 rounded-xl text-[14px] font-semibold text-left transition-opacity hover:opacity-70"
+                  style={{
+                    border: '1px solid var(--accent-warn)',
+                    color: 'var(--accent-warn)',
+                    background: 'transparent',
+                    minHeight: 'unset',
+                  }}
+                >
+                  Clear All History
+                </button>
+              </div>
+
+              {/* Support */}
+              <div className="flex flex-col gap-3">
+                <span className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                      style={{ color: 'var(--text-secondary)' }}>
+                  Support
+                </span>
+                <div className="p-4 rounded-xl flex flex-col gap-3"
+                     style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)' }}>
+                  <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                    Built this app to keep fasting simple. If you find it useful, consider a coffee to help cover server costs!
+                  </p>
+                  <a
+                    href="https://ko-fi.com/robogirl96"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-2 w-full py-2.5 rounded-full text-[13px] font-semibold transition-opacity hover:opacity-80"
+                    style={{ background: '#FF5E5B', color: 'white', minHeight: 'unset' }}
+                  >
+                    <Heart size={14} strokeWidth={1.5} fill="white" style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                    Buy me a Coffee
+                    <ExternalLink size={12} strokeWidth={1.5} style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                  </a>
+                </div>
+              </div>
+
+              <p className="text-center text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                Version 1.1.0 · Built with Gemini
+              </p>
             </div>
+          </div>
         </div>
       )}
 
-      {/* Manual Start Modal */}
+      {/* ── Manual Start Modal ─────────────────────────────── */}
       {showManualStart && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
-                <button 
-                    onClick={() => setShowManualStart(false)}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
-                >
-                    <X className="w-5 h-5" />
-                </button>
+        <div className={overlayClass} onClick={() => setShowManualStart(false)}>
+          <div
+            className={sheetClass}
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="manual-start-title"
+          >
+            <DragHandle />
+            <ModalHeader title="Set Start Time" onClose={() => setShowManualStart(false)} />
 
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <Clock className="w-5 h-5 text-blue-400" /> Set Start Time
-                </h2>
-                
-                <p className="text-sm text-slate-400 mb-6">
-                    Forgot to start the timer? No problem. Pick when you started fasting.
-                </p>
-
-                <form onSubmit={handleManualStartSubmit} className="space-y-4">
-                    <input 
-                        type="datetime-local" 
-                        name="startTime"
-                        required
-                        max={getLocalISOString()}
-                        className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                    />
-                    
-                    <button 
-                        type="submit"
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors"
-                    >
-                        Start Fasting
-                    </button>
-                </form>
-            </div>
-        </div>
-      )}
-
-      {/* Edit Entry Modal */}
-      {editingEntry && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-slate-900 w-full max-w-sm rounded-2xl p-6 shadow-2xl border border-slate-700 relative animate-in zoom-in-95 duration-200">
-                <button 
-                    onClick={() => {
-                        setEditingEntry(null);
-                        setShowHistory(true);
+            <div className="p-6">
+              <p className="text-[14px] mb-6" style={{ color: 'var(--text-secondary)' }}>
+                Forgot to start the timer? Pick when you started fasting.
+              </p>
+              <form onSubmit={handleManualStartSubmit} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="manual-start-input"
+                    className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Start time
+                  </label>
+                  <input
+                    id="manual-start-input"
+                    type="datetime-local"
+                    name="startTime"
+                    required
+                    max={getLocalISOString()}
+                    className="w-full rounded-[10px] px-4 py-3 text-[14px]"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
                     }}
-                    className="absolute top-4 right-4 text-slate-400 hover:text-white"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="h-14 rounded-full text-[15px] font-semibold transition-opacity hover:opacity-80"
+                  style={{ background: 'var(--accent)', color: 'white' }}
                 >
-                    <X className="w-5 h-5" />
+                  Begin Fast
                 </button>
-
-                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
-                    <Pencil className="w-5 h-5 text-blue-400" /> Edit Fast
-                </h2>
-                
-                <form onSubmit={handleUpdateEntry} className="space-y-4">
-                    <div>
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">Start Time</label>
-                        <input 
-                            type="datetime-local" 
-                            name="startTime"
-                            required
-                            defaultValue={getLocalISOString(editingEntry.start)}
-                            max={getLocalISOString()}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2 block">End Time</label>
-                        <input 
-                            type="datetime-local" 
-                            name="endTime"
-                            required
-                            defaultValue={getLocalISOString(editingEntry.end)}
-                            max={getLocalISOString()}
-                            className="w-full bg-slate-800 border border-slate-700 text-white rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
-                        />
-                    </div>
-                    
-                    <button 
-                        type="submit"
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-colors"
-                    >
-                        Save Changes
-                    </button>
-                </form>
+              </form>
             </div>
+          </div>
         </div>
       )}
-	  
-	  {/* UNCOMMENT THE LINE BELOW FOR VERCEL DEPLOYMENT */}
-      { <Analytics /> }
+
+      {/* ── Edit Entry Modal ───────────────────────────────── */}
+      {editingEntry && (
+        <div
+          className={overlayClass}
+          onClick={() => { setEditingEntry(null); setShowHistory(true); }}
+        >
+          <div
+            className={sheetClass}
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-entry-title"
+          >
+            <DragHandle />
+            <ModalHeader
+              title="Edit Entry"
+              onClose={() => { setEditingEntry(null); setShowHistory(true); }}
+            />
+
+            <div className="p-6">
+              <p className="text-[14px] mb-6" style={{ color: 'var(--text-secondary)' }}>
+                Adjust the start and end times for this entry.
+              </p>
+              <form onSubmit={handleUpdateEntry} className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="edit-start"
+                    className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    Start time
+                  </label>
+                  <input
+                    id="edit-start"
+                    type="datetime-local"
+                    name="startTime"
+                    required
+                    defaultValue={getLocalISOString(editingEntry.start)}
+                    max={getLocalISOString()}
+                    className="w-full rounded-[10px] px-4 py-3 text-[14px]"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                <div className="flex flex-col gap-2">
+                  <label
+                    htmlFor="edit-end"
+                    className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    End time
+                  </label>
+                  <input
+                    id="edit-end"
+                    type="datetime-local"
+                    name="endTime"
+                    required
+                    defaultValue={getLocalISOString(editingEntry.end)}
+                    max={getLocalISOString()}
+                    className="w-full rounded-[10px] px-4 py-3 text-[14px]"
+                    style={{
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      color: 'var(--text-primary)',
+                      outline: 'none',
+                    }}
+                  />
+                </div>
+
+                {/* Inline validation error */}
+                {editError && (
+                  <p className="text-[13px]" role="alert" style={{ color: 'var(--accent-warn)' }}>
+                    {editError}
+                  </p>
+                )}
+
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => { setEditingEntry(null); setShowHistory(true); }}
+                    className="flex-1 py-3 rounded-full text-[14px] font-semibold transition-opacity hover:opacity-70"
+                    style={{
+                      color: 'var(--text-secondary)',
+                      background: 'var(--bg-elevated)',
+                      border: '1px solid var(--border)',
+                      minHeight: 'unset',
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-1 py-3 rounded-full text-[14px] font-semibold transition-opacity hover:opacity-80"
+                    style={{ background: 'var(--accent)', color: 'white', minHeight: 'unset' }}
+                  >
+                    Save Changes
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Analytics />
     </div>
   );
 }
