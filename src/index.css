@@ -1,15 +1,172 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-/* Ensure the app is always full screen and dark */
+
+/* ── Color tokens ─────────────────────────────────────── */
+:root {
+  --bg-base:      #F9F7F4;
+  --bg-surface:   #FFFFFF;
+  --bg-elevated:  #F2EFE9;
+  --border:       #E4DED5;
+  --text-primary: #1A1714;
+  --text-secondary:#6B6560;
+  --accent:       #3D6B5C;
+  --accent-warn:  #B84B3C;
+  --accent-gold:  #C49A3C;
+  --success:      #3D8C5C;
+  --btn-shadow-idle: rgba(61, 107, 92, 0.35);
+  --btn-shadow-warn: rgba(184, 75, 60, 0.35);
+}
+
+.dark {
+  --bg-base:      #0E0F11;
+  --bg-surface:   #17191D;
+  --bg-elevated:  #1F2127;
+  --border:       #2C2F36;
+  --text-primary: #F0EDEA;
+  --text-secondary:#8A8580;
+  --accent:       #4E8F78;
+  --accent-warn:  #D45F4F;
+  --accent-gold:  #D4A94C;
+  --success:      #4EA872;
+  --btn-shadow-idle: rgba(78, 143, 120, 0.35);
+  --btn-shadow-warn: rgba(212, 95, 79, 0.35);
+}
+
+/* ── Base ─────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
 body {
-    background-color: #0f172a; /* slate-900 */
-    min-height: 100vh;
-    margin: 0;
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  -webkit-font-smoothing: antialiased;
 }
 
 #root {
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ── Focus rings ──────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* ── Touch targets ────────────────────────────────────── */
+button, a {
+  min-height: 44px;
+  min-width: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Override for elements that are already sized */
+.no-min-size {
+  min-height: unset;
+  min-width: unset;
+}
+
+/* ── Keyframe animations ──────────────────────────────── */
+@keyframes sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+
+@keyframes modal-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes glow-pulse {
+  0%, 100% { opacity: 0.4; }
+  50%       { opacity: 0.9; }
+}
+
+@keyframes toast-up {
+  from { opacity: 0; transform: translateX(-50%) translateY(12px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes streak-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Animation utility classes ────────────────────────── */
+.modal-sheet {
+  animation: sheet-up 300ms cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@media (min-width: 640px) {
+  .modal-sheet {
+    animation: modal-in 200ms ease-out both;
+  }
+}
+
+.ring-glow {
+  animation: glow-pulse 4s ease-in-out infinite;
+}
+
+.ring-glow-intense {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+.toast-in {
+  animation: toast-up 250ms ease-out both;
+}
+
+.streak-in {
+  animation: streak-in 300ms ease-out both;
+}
+
+/* ── Button hover shadow ──────────────────────────────── */
+.btn-primary:hover {
+  box-shadow: 0 4px 16px var(--btn-shadow-idle);
+}
+
+.btn-warn:hover {
+  box-shadow: 0 4px 16px var(--btn-shadow-warn);
+}
+
+.btn-primary:active,
+.btn-warn:active {
+  transform: scale(0.98);
+}
+
+/* ── datetime-local input theming ─────────────────────── */
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+}
+
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.7);
+}
+
+/* ── Reduced motion ───────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .modal-sheet,
+  .toast-in,
+  .streak-in {
+    animation: none;
+  }
+
+  .ring-glow,
+  .ring-glow-intense {
+    animation: none;
+    opacity: 0.1;
+  }
+
+  * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
 }
