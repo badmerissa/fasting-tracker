@@ -42,13 +42,6 @@ const BLOG_ARTICLES = [
     category: 'Science & Research',
     items: [
       {
-        title: 'Effects of Intermittent Fasting on Health, Aging, and Disease',
-        source: 'New England Journal of Medicine',
-        description: 'Landmark 2019 peer-reviewed study by Mark Mattson et al. on metabolic switching and its clinical implications.',
-        url: 'https://www.nejm.org/doi/full/10.1056/NEJMra1905136',
-        readTime: '20 min',
-      },
-      {
         title: 'Intermittent Fasting: Surprising Update',
         source: 'Harvard Health Publishing',
         description: 'Harvard researchers examine the latest evidence on IF and which populations are most likely to benefit.',
@@ -66,13 +59,6 @@ const BLOG_ARTICLES = [
         description: 'Covers weight loss, insulin sensitivity, cellular autophagy, brain health, inflammation, and longevity markers.',
         url: 'https://www.healthline.com/nutrition/10-health-benefits-of-intermittent-fasting',
         readTime: '10 min',
-      },
-      {
-        title: 'Intermittent Fasting: Is the Wait Worth the Weight?',
-        source: 'Current Obesity Reports',
-        description: 'Systematic review comparing IF to continuous caloric restriction on adherence, safety, and long-term outcomes.',
-        url: 'https://link.springer.com/article/10.1007/s13679-017-0271-x',
-        readTime: '15 min',
       },
     ],
   },
