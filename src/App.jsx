@@ -3,7 +3,7 @@ import { Analytics } from "@vercel/analytics/react";
 import {
   Square, Clock, Calendar, CheckCircle2, Settings,
   Heart, ExternalLink, X, Pencil, Flame, Trash2,
-  Sun, Moon, MoreHorizontal,
+  Sun, Moon, MoreHorizontal, BookOpen,
 } from 'lucide-react';
 
 const FASTING_MODES = [
@@ -16,6 +16,105 @@ const FASTING_MODES = [
 
 const getModeShortLabel = (mode) =>
   mode.label.includes('Test') ? 'Test' : mode.label.split(' ')[0];
+
+// ── Curated intermittent fasting reading list ───────────
+const BLOG_ARTICLES = [
+  {
+    category: 'Getting Started',
+    items: [
+      {
+        title: 'Intermittent Fasting: What Is It and How Does It Work?',
+        source: 'Johns Hopkins Medicine',
+        description: 'A clear overview of how intermittent fasting shifts your metabolism and what beginners need to know before starting.',
+        url: 'https://www.hopkinsmedicine.org/health/wellness-and-prevention/intermittent-fasting-what-is-it-and-how-does-it-work',
+        readTime: '5 min',
+      },
+      {
+        title: 'Intermittent Fasting 101 — The Ultimate Beginner\'s Guide',
+        source: 'Healthline',
+        description: 'Everything you need to know: the different methods, the science, the benefits, and how to get started safely.',
+        url: 'https://www.healthline.com/nutrition/intermittent-fasting-guide',
+        readTime: '12 min',
+      },
+    ],
+  },
+  {
+    category: 'Science & Research',
+    items: [
+      {
+        title: 'Effects of Intermittent Fasting on Health, Aging, and Disease',
+        source: 'New England Journal of Medicine',
+        description: 'Landmark 2019 peer-reviewed study by Mark Mattson et al. on metabolic switching and its clinical implications.',
+        url: 'https://www.nejm.org/doi/full/10.1056/NEJMra1905136',
+        readTime: '20 min',
+      },
+      {
+        title: 'Intermittent Fasting: Surprising Update',
+        source: 'Harvard Health Publishing',
+        description: 'Harvard researchers examine the latest evidence on IF and which populations are most likely to benefit.',
+        url: 'https://www.health.harvard.edu/blog/intermittent-fasting-surprising-update-2018062914156',
+        readTime: '8 min',
+      },
+    ],
+  },
+  {
+    category: 'Health Benefits',
+    items: [
+      {
+        title: '10 Evidence-Based Health Benefits of Intermittent Fasting',
+        source: 'Healthline',
+        description: 'Covers weight loss, insulin sensitivity, cellular autophagy, brain health, inflammation, and longevity markers.',
+        url: 'https://www.healthline.com/nutrition/10-health-benefits-of-intermittent-fasting',
+        readTime: '10 min',
+      },
+      {
+        title: 'Intermittent Fasting: Is the Wait Worth the Weight?',
+        source: 'Current Obesity Reports',
+        description: 'Systematic review comparing IF to continuous caloric restriction on adherence, safety, and long-term outcomes.',
+        url: 'https://link.springer.com/article/10.1007/s13679-017-0271-x',
+        readTime: '15 min',
+      },
+    ],
+  },
+  {
+    category: 'Protocol Deep-Dives',
+    items: [
+      {
+        title: '16/8 Intermittent Fasting: A Beginner\'s Guide',
+        source: 'Healthline',
+        description: 'The most popular IF method explained — choosing your eating window, what to eat, and common mistakes to avoid.',
+        url: 'https://www.healthline.com/nutrition/16-8-intermittent-fasting',
+        readTime: '9 min',
+      },
+      {
+        title: 'What Is the 5:2 Diet?',
+        source: 'Healthline',
+        description: 'A complete guide to the 5:2 method — eating normally five days per week and restricting calories on two.',
+        url: 'https://www.healthline.com/nutrition/the-5-2-diet-guide',
+        readTime: '7 min',
+      },
+    ],
+  },
+  {
+    category: 'Tips & Safety',
+    items: [
+      {
+        title: 'Intermittent Fasting: Who Should Avoid It',
+        source: 'Mayo Clinic',
+        description: 'Important safety guidance on who should skip IF, including pregnant women, those with eating disorders, and people with diabetes.',
+        url: 'https://www.mayoclinic.org/healthy-lifestyle/nutrition-and-healthy-eating/expert-answers/intermittent-fasting/faq-20441303',
+        readTime: '5 min',
+      },
+      {
+        title: 'Intermittent Fasting for Women: Benefits, Risks, and Guidelines',
+        source: 'Healthline',
+        description: 'Women respond differently to fasting. This guide covers the evidence, potential hormonal risks, and tailored recommendations.',
+        url: 'https://www.healthline.com/nutrition/intermittent-fasting-for-women',
+        readTime: '9 min',
+      },
+    ],
+  },
+];
 
 // SVG ring constants (viewBox 300×300)
 const RING_R    = 135;
@@ -36,6 +135,7 @@ export default function App() {
   const [editingEntry,   setEditingEntry]   = useState(null);
 
   // ── New UI state ────────────────────────────────────────
+  const [showBlog,       setShowBlog]       = useState(false);
   const [theme,          setTheme]          = useState('light');
   const [showToast,      setShowToast]      = useState(false);
   const [activeMenuId,   setActiveMenuId]   = useState(null);   // three-dot menu open
@@ -302,6 +402,17 @@ export default function App() {
         </h1>
 
         <div className="flex items-center gap-2">
+          {/* Blog */}
+          <button
+            onClick={() => setShowBlog(true)}
+            title="Fasting Resources"
+            aria-label="View intermittent fasting articles"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
+            style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+          >
+            <BookOpen size={16} strokeWidth={1.5} />
+          </button>
+
           {/* History — given visual priority with slightly bolder background */}
           <button
             onClick={() => setShowHistory(true)}
@@ -952,6 +1063,115 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Blog / Reading List Modal ──────────────────────── */}
+      {showBlog && (
+        <div className={overlayClass} onClick={() => setShowBlog(false)}>
+          <div
+            className={sheetClass}
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="blog-title"
+          >
+            <DragHandle />
+            <div className="flex justify-between items-center px-6 py-4"
+                 style={{ borderBottom: '1px solid var(--border)' }}>
+              <div>
+                <h2 id="blog-title" className="text-xl font-serif" style={{ color: 'var(--text-primary)' }}>
+                  Fasting Resources
+                </h2>
+                <p className="text-[11px] mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+                  10 curated articles from trusted sources
+                </p>
+              </div>
+              <button
+                onClick={() => setShowBlog(false)}
+                aria-label="Close resources"
+                className="w-8 h-8 flex items-center justify-center rounded-full hover:opacity-70 transition-opacity"
+                style={{ background: 'var(--bg-elevated)', color: 'var(--text-secondary)' }}
+              >
+                <X size={16} strokeWidth={1.5} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1 p-4 flex flex-col gap-6">
+              {BLOG_ARTICLES.map(({ category, items }) => (
+                <section key={category} aria-labelledby={`blog-cat-${category}`}>
+                  <h3
+                    id={`blog-cat-${category}`}
+                    className="text-[11px] font-semibold uppercase tracking-[0.06em] mb-3 px-1"
+                    style={{ color: 'var(--text-secondary)' }}
+                  >
+                    {category}
+                  </h3>
+                  <div className="flex flex-col gap-2">
+                    {items.map(article => (
+                      <a
+                        key={article.url}
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group flex flex-col gap-1.5 p-4 rounded-2xl transition-opacity hover:opacity-80"
+                        style={{
+                          background: 'var(--bg-elevated)',
+                          border: '1px solid var(--border)',
+                          textDecoration: 'none',
+                          minHeight: 'unset',
+                          display: 'flex',
+                        }}
+                        aria-label={`${article.title} — ${article.source}`}
+                      >
+                        {/* Source + read time */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span
+                            className="text-[11px] font-semibold uppercase tracking-[0.03em]"
+                            style={{ color: 'var(--accent)' }}
+                          >
+                            {article.source}
+                          </span>
+                          <span className="text-[11px]" style={{ color: 'var(--text-secondary)' }}>
+                            {article.readTime} read
+                          </span>
+                        </div>
+
+                        {/* Title */}
+                        <p
+                          className="text-[15px] font-semibold leading-snug"
+                          style={{ color: 'var(--text-primary)' }}
+                        >
+                          {article.title}
+                        </p>
+
+                        {/* Description */}
+                        <p className="text-[13px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                          {article.description}
+                        </p>
+
+                        {/* CTA */}
+                        <div
+                          className="flex items-center gap-1 text-[12px] font-semibold mt-0.5"
+                          style={{ color: 'var(--accent)' }}
+                          aria-hidden="true"
+                        >
+                          Read article
+                          <ExternalLink size={11} strokeWidth={2} style={{ minHeight: 'unset', minWidth: 'unset' }} />
+                        </div>
+                      </a>
+                    ))}
+                  </div>
+                </section>
+              ))}
+
+              {/* Attribution note */}
+              <p className="text-center text-[11px] pb-2" style={{ color: 'var(--text-secondary)' }}>
+                All articles link to their original publishers.
+              </p>
             </div>
           </div>
         </div>
