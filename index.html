@@ -2,12 +2,118 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Fasting Tracker</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;1,9..40,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+    <!-- Primary Meta Tags -->
+    <title>Fasting Tracker — Free Intermittent Fasting Timer &amp; History</title>
+    <meta name="title" content="Fasting Tracker — Free Intermittent Fasting Timer &amp; History" />
+    <meta name="description" content="Track your intermittent fasting sessions with ease. Support for 16:8, 18:6, 20:4, 12:12 protocols. Free, private, and works offline." />
+    <meta name="keywords" content="intermittent fasting tracker, fasting timer, 16:8 fasting, 18:6 fasting, fasting app, fasting history, calorie restriction, time-restricted eating" />
+    <meta name="author" content="Fasting Tracker" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://your-domain.com/" />
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://your-domain.com/" />
+    <meta property="og:title" content="Fasting Tracker — Free Intermittent Fasting Timer &amp; History" />
+    <meta property="og:description" content="Track your intermittent fasting sessions with ease. Support for 16:8, 18:6, 20:4, 12:12 protocols. Free, private, and works offline." />
+    <meta property="og:image" content="https://your-domain.com/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="Fasting Tracker" />
+    <meta property="og:locale" content="en_US" />
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:url" content="https://your-domain.com/" />
+    <meta name="twitter:title" content="Fasting Tracker — Free Intermittent Fasting Timer &amp; History" />
+    <meta name="twitter:description" content="Track your intermittent fasting sessions with ease. Support for 16:8, 18:6, 20:4, 12:12 protocols. Free, private, and works offline." />
+    <meta name="twitter:image" content="https://your-domain.com/og-image.png" />
+
+    <!-- Fonts are self-hosted via @fontsource (see src/main.jsx) -->
+
+    <!-- Favicon & Touch Icons -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#F97316" />
+
+    <!-- JSON-LD: WebApplication -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Fasting Tracker",
+  "url": "https://your-domain.com/",
+  "description": "A free, private intermittent fasting tracker with support for 16:8, 18:6, 20:4, and 12:12 fasting protocols. Track fasting sessions, view history, and monitor streaks.",
+  "applicationCategory": "HealthApplication",
+  "operatingSystem": "Any",
+  "browserRequirements": "Requires JavaScript",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "USD"
+  },
+  "featureList": [
+    "Intermittent fasting timer",
+    "Fasting history tracking",
+    "Streak counter",
+    "Multiple fasting protocols (16:8, 18:6, 20:4, 12:12)",
+    "Dark mode support",
+    "Offline capable",
+    "Private — data stored locally"
+  ],
+  "screenshot": "https://your-domain.com/og-image.png",
+  "author": {
+    "@type": "Organization",
+    "name": "Fasting Tracker"
+  }
+}
+    </script>
+
+    <!-- JSON-LD: FAQPage -->
+    <script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  "mainEntity": [
+    {
+      "@type": "Question",
+      "name": "What is intermittent fasting?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Intermittent fasting (IF) is an eating pattern that cycles between periods of fasting and eating. Common protocols include 16:8 (16 hours fasting, 8 hours eating), 18:6, and 12:12."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "What is the 16:8 fasting protocol?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "The 16:8 protocol involves fasting for 16 hours and restricting eating to an 8-hour window each day. It is one of the most popular and sustainable intermittent fasting methods."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "Is intermittent fasting safe?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Intermittent fasting is generally considered safe for most healthy adults. However, it is not recommended for pregnant or breastfeeding women, those with eating disorders, or people with certain medical conditions. Consult a healthcare provider before starting."
+      }
+    },
+    {
+      "@type": "Question",
+      "name": "How do I track my intermittent fasting?",
+      "acceptedAnswer": {
+        "@type": "Answer",
+        "text": "Fasting Tracker is a free web app that lets you start and stop a fasting timer, log your fasting history, and track your streak. All data is stored privately in your browser."
+      }
+    }
+  ]
+}
+    </script>
   </head>
   <body>
     <div id="root"></div>
