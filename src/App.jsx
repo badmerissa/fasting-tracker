@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Analytics } from "@vercel/analytics/react";
+import { track } from '@vercel/analytics';
 import {
   Square, Clock, Calendar, CheckCircle2, Settings,
   Heart, ExternalLink, X, Pencil, Flame, Trash2,
@@ -274,9 +275,11 @@ export default function App() {
       ]);
       setIsFasting(false);
       setStartTime(null);
+      track('fast_stopped', { protocol: selectedMode.label, goal_met: goalMet });
     } else {
       setStartTime(Date.now());
       setIsFasting(true);
+      track('fast_started', { protocol: selectedMode.label });
     }
   };
 
@@ -390,7 +393,7 @@ export default function App() {
         <div className="flex items-center gap-2">
           {/* Blog */}
           <button
-            onClick={() => setShowBlog(true)}
+            onClick={() => { setShowBlog(true); track('blog_resource_viewed'); }}
             title="Fasting Resources"
             aria-label="View intermittent fasting articles"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
@@ -401,7 +404,7 @@ export default function App() {
 
           {/* History — given visual priority with slightly bolder background */}
           <button
-            onClick={() => setShowHistory(true)}
+            onClick={() => { setShowHistory(true); track('history_viewed'); }}
             title="History"
             aria-label="View fasting history"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
@@ -412,7 +415,7 @@ export default function App() {
 
           {/* Theme toggle */}
           <button
-            onClick={() => setTheme(t => t === 'dark' ? 'light' : 'dark')}
+            onClick={() => { setTheme(t => { track('theme_toggled', { to: t === 'dark' ? 'light' : 'dark' }); return t === 'dark' ? 'light' : 'dark'; }); }}
             title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
             aria-label="Toggle theme"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
@@ -423,7 +426,7 @@ export default function App() {
 
           {/* Settings */}
           <button
-            onClick={() => setShowSettings(true)}
+            onClick={() => { setShowSettings(true); track('settings_opened'); }}
             title="Settings"
             aria-label="Open settings"
             className="w-8 h-8 flex items-center justify-center rounded-full transition-opacity hover:opacity-70"
@@ -585,6 +588,31 @@ export default function App() {
           ))}
         </div>
       </div>
+
+      {/* ── SEO Landing Copy (below the fold, crawlable) ─────── */}
+      <section
+        aria-label="About Fasting Tracker"
+        className="px-6 py-8 w-full max-w-md mx-auto"
+        style={{ borderTop: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+      >
+        <h2 className="text-base font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          The Simplest Intermittent Fasting Tracker
+        </h2>
+        <p className="text-[13px] leading-relaxed mb-4">
+          Fasting Tracker is a free, private web app for tracking your intermittent fasting
+          sessions. Whether you follow 16:8, 18:6, 20:4, or 12:12 — start your timer,
+          log your history, and track your streak, all without creating an account.
+        </p>
+        <h3 className="text-[13px] font-semibold mb-2" style={{ color: 'var(--text-primary)' }}>
+          Supported Fasting Protocols
+        </h3>
+        <ul className="text-[13px] leading-relaxed space-y-1 list-none">
+          <li><strong>16:8</strong> — Fast for 16 hours, eat within an 8-hour window</li>
+          <li><strong>18:6</strong> — Fast for 18 hours, eat within a 6-hour window</li>
+          <li><strong>20:4</strong> — Fast for 20 hours, eat within a 4-hour window</li>
+          <li><strong>12:12</strong> — Fast for 12 hours, eat within a 12-hour window</li>
+        </ul>
+      </section>
 
       {/* ── Footer ─────────────────────────────────────────── */}
       <footer
@@ -819,7 +847,7 @@ export default function App() {
                     return (
                       <button
                         key={mode.label}
-                        onClick={() => setSelectedMode(mode)}
+                        onClick={() => { setSelectedMode(mode); track('protocol_changed', { protocol: mode.label }); }}
                         className="px-4 py-2 rounded-full text-[13px] font-semibold transition-all hover:opacity-80"
                         style={{
                           background: active ? 'var(--accent)' : 'var(--bg-elevated)',
@@ -1103,6 +1131,7 @@ export default function App() {
                         href={article.url}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={() => track('blog_article_clicked', { article_title: article.title, source: article.source })}
                         className="group flex flex-col gap-1.5 p-4 rounded-2xl transition-opacity hover:opacity-80"
                         style={{
                           background: 'var(--bg-elevated)',
